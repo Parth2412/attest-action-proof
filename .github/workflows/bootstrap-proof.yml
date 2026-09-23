@@ -54,12 +54,14 @@ jobs:
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
           git add -- \
             .attest/config.yaml \
-            .attest/policy.yaml \
-            .github/workflows/attest.yml
+            .attest/policy.yaml
           test "$(git diff --cached --name-only)" = "$(printf '%s\n' \
             '.attest/config.yaml' \
-            '.attest/policy.yaml' \
-            '.github/workflows/attest.yml')"
+            '.attest/policy.yaml')"
+          git commit -m 'test: seed generated attest policy'
+          git rev-parse HEAD > proof-seed-commit.txt
+          git add -- .github/workflows/attest.yml
+          test "$(git diff --cached --name-only)" = '.github/workflows/attest.yml'
           git commit -m 'test: prove released attest onboarding'
           git bundle create generated-onboarding-v0.1.1.bundle main "${branch}"
           git bundle verify generated-onboarding-v0.1.1.bundle
@@ -68,6 +70,8 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: generated-onboarding-v0.1.1-bundle-${{ github.run_id }}
-          path: generated-onboarding-v0.1.1.bundle
+          path: |
+            generated-onboarding-v0.1.1.bundle
+            proof-seed-commit.txt
           if-no-files-found: error
           retention-days: 90
