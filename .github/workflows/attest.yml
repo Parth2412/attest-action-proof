@@ -1,0 +1,24 @@
+name: attest
+
+on:
+  pull_request:
+
+permissions:
+  contents: write
+  id-token: write
+  pull-requests: read
+  checks: read
+
+jobs:
+  attest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+      - uses: Parth2412/attest/action@a1c59cc67bf67aba22ffca876309f855ea8663af
+        with:
+          mode: run
+          policy: .attest/policy.yaml
+          push-attestation: "true"
+          fail-on-violation: "true"
