@@ -4,8 +4,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
-  pull-requests: write
+  contents: read
 
 jobs:
   generate:
@@ -13,7 +12,8 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          persist-credentials: true
+          ref: main
+          persist-credentials: false
       - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
         with:
           version: "0.11.2"
@@ -23,12 +23,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          uv tool run --from attest-cli==0.1.0 attest init \
+          uv tool run --from attest-cli==0.1.1 attest init \
             --repository . \
             --github-repository Parth2412/attest-action-proof \
             --default-branch main \
             --checkout-ref actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 \
-            --action-ref Parth2412/attest/action@a1c59cc67bf67aba22ffca876309f855ea8663af \
+            --action-ref Parth2412/attest/action@9aa18c1d5af6659c4dbc79443dfda93208395dff \
             --json
           test "$(git status --porcelain=v1 --untracked-files=all)" = "$(printf '%s\n' \
             '?? .attest/config.yaml' \
@@ -38,11 +38,17 @@ jobs:
             .attest/config.yaml \
             .attest/policy.yaml \
             .github/workflows/attest.yml
+          grep -Fqx \
+            '      - uses: Parth2412/attest/action@9aa18c1d5af6659c4dbc79443dfda93208395dff' \
+            .github/workflows/attest.yml
+          token_line='          GITHUB_TOKEN: $'
+          token_line+='{{ github.token }}'
+          grep -Fqx "${token_line}" .github/workflows/attest.yml
       - name: Create the bot-authored proof commit bundle
         shell: bash
         run: |
           set -euo pipefail
-          branch=proof/generated-onboarding
+          branch=proof/generated-onboarding-v0.1.1
           git switch -c "${branch}"
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
@@ -54,14 +60,14 @@ jobs:
             '.attest/config.yaml' \
             '.attest/policy.yaml' \
             '.github/workflows/attest.yml')"
-          git commit -m 'test: add generated attest onboarding'
-          git bundle create generated-onboarding.bundle main "${branch}"
-          git bundle verify generated-onboarding.bundle
-          sha256sum generated-onboarding.bundle
+          git commit -m 'test: prove released attest onboarding'
+          git bundle create generated-onboarding-v0.1.1.bundle main "${branch}"
+          git bundle verify generated-onboarding-v0.1.1.bundle
+          sha256sum generated-onboarding-v0.1.1.bundle
       - name: Retain the exact bot-authored commit
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: generated-onboarding-bundle-${{ github.run_id }}
-          path: generated-onboarding.bundle
+          name: generated-onboarding-v0.1.1-bundle-${{ github.run_id }}
+          path: generated-onboarding-v0.1.1.bundle
           if-no-files-found: error
           retention-days: 90
