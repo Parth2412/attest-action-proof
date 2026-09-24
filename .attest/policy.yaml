@@ -1,0 +1,19 @@
+version: 1
+policies:
+  - id: ATTEST-DEFAULT-001
+    description: "Require trusted signed provenance and independent human review"
+    match:
+      branches: ["main"]
+      paths: ["**"]
+    require:
+      attestation: true
+      environment:
+        trusted: true
+      signer:
+        issuer: "https://token.actions.githubusercontent.com"
+        identity: "https://github.com/Parth2412/attest-action-proof/.github/workflows/attest.yml@refs/pull/*/merge"
+      transparencyLog: true
+      review:
+        minHumanApprovals: 1
+        approverMustNotBeAuthor: true
+    onViolation: block
