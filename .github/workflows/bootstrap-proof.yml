@@ -1,11 +1,10 @@
-name: bootstrap proof
+name: bootstrap v1.0.4 proof
 
 on:
   workflow_dispatch:
 
 permissions:
-  contents: write
-  pull-requests: write
+  contents: read
 
 jobs:
   generate:
@@ -13,55 +12,106 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          persist-credentials: true
+          ref: main
+          persist-credentials: false
       - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
         with:
           version: "0.11.2"
           python-version: "3.12"
           enable-cache: false
-      - name: Generate the exact released onboarding files
+      - name: Generate and validate the exact released onboarding files
         shell: bash
         run: |
           set -euo pipefail
-          uv tool run --from attest-cli==0.1.0 attest init \
-            --repository . \
+          git init --initial-branch=main generated-repository
+          uv tool run --from attest-cli==0.1.3 attest init \
+            --repository generated-repository \
             --github-repository Parth2412/attest-action-proof \
             --default-branch main \
             --checkout-ref actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 \
-            --action-ref Parth2412/attest/action@a1c59cc67bf67aba22ffca876309f855ea8663af \
-            --json
-          test "$(git status --porcelain=v1 --untracked-files=all)" = "$(printf '%s\n' \
+            --action-ref Parth2412/attest/action@4e73dcaf888f15967da66826d48cca5ac6684fcb \
+            --json > generated-init.json
+          jq -e '
+            .command == "init" and
+            .outcome == "success" and
+            .exitCode == 0 and
+            .data.workflowIdentity ==
+              "https://github.com/Parth2412/attest-action-proof/.github/workflows/attest.yml@refs/pull/*/merge"
+          ' generated-init.json >/dev/null
+          test "$(git -C generated-repository status --porcelain=v1 --untracked-files=all)" = "$(printf '%s\n' \
             '?? .attest/config.yaml' \
             '?? .attest/policy.yaml' \
             '?? .github/workflows/attest.yml')"
-          sha256sum \
-            .attest/config.yaml \
-            .attest/policy.yaml \
-            .github/workflows/attest.yml
+          test "$(sha256sum generated-repository/.attest/config.yaml | cut -d ' ' -f 1)" = \
+            a6463edd17fc24518e0893e4e1f50d37ed2c12cefbbf21b1f3b81cfed759b789
+          test "$(sha256sum generated-repository/.attest/policy.yaml | cut -d ' ' -f 1)" = \
+            b87c86b01ccfcf240231a0b0560d3ed6f03a6f37be880a8f54e971b288ebcf65
+          test "$(sha256sum generated-repository/.github/workflows/attest.yml | cut -d ' ' -f 1)" = \
+            b9de9b91192d45066acb93a94e6906a1fce0d025a3a586af49d1288e86411527
+          cmp generated-repository/.attest/config.yaml .attest/config.yaml
+          cmp generated-repository/.attest/policy.yaml .attest/policy.yaml
+          grep -Fqx \
+            '      - uses: Parth2412/attest/action@4e73dcaf888f15967da66826d48cca5ac6684fcb' \
+            generated-repository/.github/workflows/attest.yml
+          grep -Fqx \
+            '  identity: "https://github.com/Parth2412/attest-action-proof/.github/workflows/attest.yml@refs/pull/*/merge"' \
+            generated-repository/.attest/config.yaml
+          grep -Fqx \
+            '        identity: "https://github.com/Parth2412/attest-action-proof/.github/workflows/attest.yml@refs/pull/*/merge"' \
+            generated-repository/.attest/policy.yaml
+          token_line='          GITHUB_TOKEN: $'
+          token_line+='{{ github.token }}'
+          grep -Fqx "${token_line}" generated-repository/.github/workflows/attest.yml
+          mkdir generated-evidence
+          cp generated-repository/.attest/config.yaml generated-evidence/config.yaml
+          cp generated-repository/.attest/policy.yaml generated-evidence/policy.yaml
+          cp generated-repository/.github/workflows/attest.yml generated-evidence/attest.yml
+          sha256sum generated-evidence/* > generated-evidence/sha256sums.txt
+          cp generated-init.json generated-evidence/init-report.json
       - name: Create the bot-authored proof commit bundle
         shell: bash
         run: |
           set -euo pipefail
-          branch=proof/generated-onboarding
+          branch=proof/generated-onboarding-v0.1.4
           git switch -c "${branch}"
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-          git add -- \
-            .attest/config.yaml \
-            .attest/policy.yaml \
-            .github/workflows/attest.yml
-          test "$(git diff --cached --name-only)" = "$(printf '%s\n' \
-            '.attest/config.yaml' \
-            '.attest/policy.yaml' \
-            '.github/workflows/attest.yml')"
-          git commit -m 'test: add generated attest onboarding'
-          git bundle create generated-onboarding.bundle main "${branch}"
-          git bundle verify generated-onboarding.bundle
-          sha256sum generated-onboarding.bundle
-      - name: Retain the exact bot-authored commit
+          printf '%s\n' \
+            '"""v1.0.4 proof fixture: importing repository content must fail the run."""' \
+            'raise RuntimeError("v1.0.4 repository-controlled sitecustomize.py executed")' \
+            > sitecustomize.py
+          git add -- sitecustomize.py
+          test "$(git diff --cached --name-only)" = sitecustomize.py
+          git commit -m 'test(proof): refresh nonexecution fixture'
+          git rev-parse HEAD > proof-precheck-commit.txt
+          cp generated-repository/.github/workflows/attest.yml .github/workflows/attest.yml
+          git add -- .github/workflows/attest.yml
+          test "$(git diff --cached --name-only)" = .github/workflows/attest.yml
+          git commit -m 'test(proof): activate Action v1.0.4'
+          git rev-parse HEAD > proof-final-commit.txt
+          cmp generated-repository/.attest/config.yaml <(git show HEAD:.attest/config.yaml)
+          cmp generated-repository/.attest/policy.yaml <(git show HEAD:.attest/policy.yaml)
+          cmp generated-repository/.github/workflows/attest.yml \
+            <(git show HEAD:.github/workflows/attest.yml)
+          test "$(git log -2 --format=%an | sort -u)" = 'github-actions[bot]'
+          test "$(git log -2 --format=%ae | sort -u)" = \
+            '41898282+github-actions[bot]@users.noreply.github.com'
+          git log -2 \
+            --format='%H%x09%an%x09%ae%x09%cn%x09%ce%x09%s' \
+            > proof-commits.tsv
+          git bundle create generated-onboarding-v0.1.4.bundle main "${branch}"
+          git bundle verify generated-onboarding-v0.1.4.bundle
+          sha256sum generated-onboarding-v0.1.4.bundle > proof-bundle.sha256
+      - name: Retain exact generation and bot-authorship evidence
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: generated-onboarding-bundle-${{ github.run_id }}
-          path: generated-onboarding.bundle
+          name: generated-onboarding-v0.1.4-bundle-${{ github.run_id }}
+          path: |
+            generated-onboarding-v0.1.4.bundle
+            generated-evidence
+            proof-bundle.sha256
+            proof-commits.tsv
+            proof-precheck-commit.txt
+            proof-final-commit.txt
           if-no-files-found: error
           retention-days: 90
