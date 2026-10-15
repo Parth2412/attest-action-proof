@@ -16,7 +16,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           fetch-depth: 0
-      - uses: Parth2412/attest/action@4e73dcaf888f15967da66826d48cca5ac6684fcb
+      - uses: Parth2412/attest/action@203d2deb7dff946dc82c6efc6506bc34adbcd209
         env:
           GITHUB_TOKEN: ${{ github.token }}
         with:
