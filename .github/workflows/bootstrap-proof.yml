@@ -1,4 +1,4 @@
-name: bootstrap v1.0.8 proof
+name: bootstrap v1.0.8 review-gate proof
 
 on:
   workflow_dispatch:
@@ -72,42 +72,38 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          branch=proof/generated-onboarding-v0.1.8
+          branch=proof/review-gate-v0.1.8
           git switch -c "${branch}"
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
           printf '%s\n' \
-            '"""v1.0.8 proof fixture: importing repository content must fail the run."""' \
-            'raise RuntimeError("v1.0.8 repository-controlled sitecustomize.py executed")' \
+            '"""v1.0.8 review-gate fixture: repository content must remain inert."""' \
+            'raise RuntimeError("v1.0.8 review-gate sitecustomize.py executed")' \
             > sitecustomize.py
           git add -- sitecustomize.py
           test "$(git diff --cached --name-only)" = sitecustomize.py
-          git commit -m 'test(proof): refresh nonexecution fixture'
+          git commit -m 'test(proof): replay v1.0.8 review gate'
           git rev-parse HEAD > proof-precheck-commit.txt
-          cp generated-repository/.github/workflows/attest.yml .github/workflows/attest.yml
-          git add -- .github/workflows/attest.yml
-          test "$(git diff --cached --name-only)" = .github/workflows/attest.yml
-          git commit -m 'test(proof): activate Action v1.0.8'
           git rev-parse HEAD > proof-final-commit.txt
           cmp generated-repository/.attest/config.yaml <(git show HEAD:.attest/config.yaml)
           cmp generated-repository/.attest/policy.yaml <(git show HEAD:.attest/policy.yaml)
           cmp generated-repository/.github/workflows/attest.yml \
             <(git show HEAD:.github/workflows/attest.yml)
-          test "$(git log -2 --format=%an | sort -u)" = 'github-actions[bot]'
-          test "$(git log -2 --format=%ae | sort -u)" = \
+          test "$(git log -1 --format=%an)" = 'github-actions[bot]'
+          test "$(git log -1 --format=%ae)" = \
             '41898282+github-actions[bot]@users.noreply.github.com'
-          git log -2 \
+          git log -1 \
             --format='%H%x09%an%x09%ae%x09%cn%x09%ce%x09%s' \
             > proof-commits.tsv
-          git bundle create generated-onboarding-v0.1.8.bundle main "${branch}"
-          git bundle verify generated-onboarding-v0.1.8.bundle
-          sha256sum generated-onboarding-v0.1.8.bundle > proof-bundle.sha256
+          git bundle create review-gate-v0.1.8.bundle main "${branch}"
+          git bundle verify review-gate-v0.1.8.bundle
+          sha256sum review-gate-v0.1.8.bundle > proof-bundle.sha256
       - name: Retain exact generation and bot-authorship evidence
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: generated-onboarding-v0.1.8-bundle-${{ github.run_id }}
+          name: review-gate-v0.1.8-bundle-${{ github.run_id }}
           path: |
-            generated-onboarding-v0.1.8.bundle
+            review-gate-v0.1.8.bundle
             generated-evidence
             proof-bundle.sha256
             proof-commits.tsv
